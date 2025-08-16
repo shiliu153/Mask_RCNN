@@ -42,8 +42,8 @@ def main():
     learning_rate = 0.005
 
     # 数据路径
-    train_csv = './data/severstal-steel-defect-detection/train.csv'  # 训练标签文件
-    train_img_dir = './data/train/train_images'  # 训练图片目录
+    train_csv = './data/severstal-steel-defect-detection/train.csv'
+    train_img_dir = './data/train/train_images'
 
     # 设备配置
     device = torch.device('cuda') if torch.cuda.is_available() else torch.device('cpu')
