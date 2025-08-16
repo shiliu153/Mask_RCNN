@@ -257,10 +257,8 @@ class DefectEdgeDetector:
 
     def process_image(self, image_path, output_dir, confidence_threshold=0.5,
                       edge_method='canny', save_individual=True):
-        # 获取过滤后的结果用于边缘检测和注释
         results, original_image = self.detect_defects(image_path, confidence_threshold)
 
-        # 获取原始结果用于生成完整热力图
         raw_results, _ = self.detect_defects_with_raw_outputs(image_path)
 
         image_name = os.path.splitext(os.path.basename(image_path))[0]
@@ -273,7 +271,6 @@ class DefectEdgeDetector:
         for dir_path in [edges_dir, heatmaps_dir, analysis_dir, overlays_dir]:
             os.makedirs(dir_path, exist_ok=True)
 
-        # 使用过滤后的结果保存像素分数
         class_score_maps, combined_scores, combined_labels = self.save_pixel_scores(
             results, original_image.shape, image_name, output_dir
         )
@@ -287,7 +284,6 @@ class DefectEdgeDetector:
         combined_masks = np.zeros((height, width), dtype=np.uint8)
         edge_results = []
 
-        # 处理过滤后的检测结果进行边缘检测
         if len(results['masks']) > 0:
             print(f"Processing {len(results['masks'])} defects in {image_path}")
 
@@ -328,10 +324,8 @@ class DefectEdgeDetector:
         else:
             print(f"No defects detected above threshold {confidence_threshold} in {image_path}")
 
-        # 始终保存组合边缘结果
         cv2.imwrite(os.path.join(edges_dir, f"{image_name}_combined_edges.png"), combined_edges)
 
-        # 安全检查原始结果并创建热力图
         if raw_results and 'masks' in raw_results and len(raw_results['masks']) > 0:
             raw_heatmap = self.create_raw_heatmap(raw_results, original_image.shape)
             raw_detections_count = len(raw_results['masks'])
@@ -339,11 +333,9 @@ class DefectEdgeDetector:
             raw_heatmap = np.zeros_like(original_image)
             raw_detections_count = 0
 
-        # 同时保存两种热力图
         cv2.imwrite(os.path.join(heatmaps_dir, f"{image_name}_raw_heatmap.png"),
                     cv2.cvtColor(raw_heatmap, cv2.COLOR_RGB2BGR))
 
-        # 保存过滤后的热力图
         if len(results['masks']) > 0:
             filtered_heatmap = self.create_heatmap(results, original_image.shape)
         else:
@@ -352,7 +344,6 @@ class DefectEdgeDetector:
         cv2.imwrite(os.path.join(heatmaps_dir, f"{image_name}_filtered_heatmap.png"),
                     cv2.cvtColor(filtered_heatmap, cv2.COLOR_RGB2BGR))
 
-        # 始终创建分析图表（无论是否有检测结果）
         fig, axes = plt.subplots(2, 3, figsize=(15, 10))
         axes = axes.flatten()
 
@@ -368,12 +359,10 @@ class DefectEdgeDetector:
         axes[2].set_title(f'Edges ({edge_method})')
         axes[2].axis('off')
 
-        # 在分析图中使用原始热力图
         axes[3].imshow(raw_heatmap)
         axes[3].set_title('Raw Heatmap (All Detections)')
         axes[3].axis('off')
 
-        # 创建带注释的图像
         annotated = original_image.copy()
         for result in edge_results:
             box = result['box'].astype(int)
@@ -391,7 +380,6 @@ class DefectEdgeDetector:
         axes[4].set_title('Detection Results')
         axes[4].axis('off')
 
-        # 计算统计信息
         edge_pixels = np.sum(combined_edges > 0)
         total_pixels = combined_edges.shape[0] * combined_edges.shape[1]
         edge_ratio = edge_pixels / total_pixels * 100
@@ -402,16 +390,13 @@ class DefectEdgeDetector:
         axes[5].axis('off')
 
         plt.tight_layout()
-        # 始终保存分析图表
         plt.savefig(os.path.join(analysis_dir, f"{image_name}_analysis.png"), dpi=300, bbox_inches='tight')
         plt.close()
 
-        # 创建叠加图像（使用原始热力图）
         overlay_raw = cv2.addWeighted(original_image, 0.6, raw_heatmap, 0.4, 0)
         cv2.imwrite(os.path.join(overlays_dir, f"{image_name}_overlay_raw_heatmap.png"),
                     cv2.cvtColor(overlay_raw, cv2.COLOR_RGB2BGR))
 
-        # 创建过滤后的叠加图像
         overlay_filtered = cv2.addWeighted(original_image, 0.6, filtered_heatmap, 0.4, 0)
         cv2.imwrite(os.path.join(overlays_dir, f"{image_name}_overlay_filtered_heatmap.png"),
                     cv2.cvtColor(overlay_filtered, cv2.COLOR_RGB2BGR))
@@ -421,17 +406,14 @@ class DefectEdgeDetector:
         return results
 
     def preprocess_image(self, image_path):
-        """预处理输入图像"""
         image = Image.open(image_path).convert('RGB')
         original_image = np.array(image)
 
-        # 转换为tensor
         image_tensor = self.transform(image).unsqueeze(0)
 
         return image_tensor, original_image
 
     def detect_defects_with_raw_outputs(self, image_path):
-        """获取原始检测结果（不进行阈值过滤）"""
         image_tensor, original_image = self.preprocess_image(image_path)
         image_tensor = image_tensor.to(self.device)
 
@@ -440,7 +422,6 @@ class DefectEdgeDetector:
 
         pred = predictions[0]
 
-        # 返回未过滤的原始结果
         raw_results = {
             'boxes': pred['boxes'].cpu().numpy(),
             'masks': pred['masks'].cpu().numpy(),
@@ -459,7 +440,6 @@ class DefectEdgeDetector:
 
         pred = predictions[0]
 
-        # 过滤低置信度的检测结果
         keep = pred['scores'] > confidence_threshold
 
         results = {
@@ -471,46 +451,86 @@ class DefectEdgeDetector:
 
         return results, original_image
 
+    def extract_edges_canny(self, mask, low_threshold=20, high_threshold=60):
+        print(f"Mask shape: {mask.shape}, min: {mask.min():.4f}, max: {mask.max():.4f}")
 
+        mask_normalized = mask.copy()
+        if mask_normalized.max() > 1.0:
+            mask_normalized = mask_normalized / mask_normalized.max()
 
-    def extract_edges_canny(self, mask, low_threshold=50, high_threshold=150):
-        """使用Canny算子提取边缘"""
-        # 将mask转换为uint8
-        mask_uint8 = (mask * 255).astype(np.uint8)
+        mask_binary = (mask_normalized > 0.1).astype(np.float32)
+        mask_uint8 = (mask_binary * 255).astype(np.uint8)
 
-        blurred = cv2.GaussianBlur(mask_uint8, (5, 5), 0)
+        if mask_uint8.max() == 0:
+            print("Warning: No valid mask region found")
+            return np.zeros_like(mask_uint8)
+
+        kernel = np.ones((3, 3), np.uint8)
+        mask_uint8 = cv2.morphologyEx(mask_uint8, cv2.MORPH_CLOSE, kernel)
+
+        blurred = cv2.GaussianBlur(mask_uint8, (3, 3), 0)
 
         edges = cv2.Canny(blurred, low_threshold, high_threshold)
 
+        print(f"Edges found: {np.sum(edges > 0)} pixels")
         return edges
 
     def extract_edges_contour(self, mask):
-        """使用轮廓检测提取边缘"""
-        mask_uint8 = (mask * 255).astype(np.uint8)
+        mask_normalized = mask.copy()
+        if mask_normalized.max() > 1.0:
+            mask_normalized = mask_normalized / mask_normalized.max()
+
+        mask_binary = (mask_normalized > 0.1).astype(np.uint8)
+        mask_uint8 = mask_binary * 255
+
+        print(f"Contour mask - unique values: {np.unique(mask_uint8)}")
+
+        kernel = np.ones((3, 3), np.uint8)
+        mask_uint8 = cv2.morphologyEx(mask_uint8, cv2.MORPH_CLOSE, kernel)
 
         contours, _ = cv2.findContours(mask_uint8, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
 
         edges = np.zeros_like(mask_uint8)
-        cv2.drawContours(edges, contours, -1, 255, 1)
+        if contours:
+            cv2.drawContours(edges, contours, -1, 255, 2)  # 增加线条粗细
+            print(f"Found {len(contours)} contours")
+        else:
+            print("No contours found")
 
         return edges, contours
 
     def extract_edges_morphology(self, mask):
-        """使用形态学操作提取边缘"""
-        mask_bool = mask > 0.5
+        mask_normalized = mask.copy()
+        if mask_normalized.max() > 1.0:
+            mask_normalized = mask_normalized / mask_normalized.max()
 
-        eroded = morphology.binary_erosion(mask_bool, morphology.disk(1))
+        mask_bool = mask_normalized > 0.1
+
+        print(f"Morphology mask - True pixels: {np.sum(mask_bool)}")
+
+        if np.sum(mask_bool) == 0:
+            return np.zeros_like(mask, dtype=np.uint8)
+
+        selem = morphology.disk(2)
+        eroded = morphology.binary_erosion(mask_bool, selem)
 
         edges = mask_bool ^ eroded
 
+        print(f"Morphology edges: {np.sum(edges)} pixels")
         return edges.astype(np.uint8) * 255
 
     def refine_edges(self, edges):
-        kernel = np.ones((3, 3), np.uint8)
+        if edges.max() == 0:
+            return edges
+
+        kernel = np.ones((2, 2), np.uint8)
 
         refined = cv2.morphologyEx(edges, cv2.MORPH_OPEN, kernel)
 
         refined = cv2.morphologyEx(refined, cv2.MORPH_CLOSE, kernel)
+
+        kernel_dilate = np.ones((2, 2), np.uint8)
+        refined = cv2.dilate(refined, kernel_dilate, iterations=1)
 
         return refined
 
@@ -519,8 +539,8 @@ def main():
     model_path = 'fault_detection_maskrcnn.pth'
     input_path = './data/severstal-steel-defect-detection/test_images'
     output_dir = './data/output'
-    confidence_threshold = 0.3
-    edge_method = 'canny'
+    confidence_threshold = 0.8
+    edge_method = 'contour'
 
     if os.path.exists(model_path):
         detector = DefectEdgeDetector(model_path)
