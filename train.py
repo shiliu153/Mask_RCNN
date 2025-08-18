@@ -36,8 +36,8 @@ def train_one_epoch(model, optimizer, data_loader, device, epoch):
 
 def main():
     # 配置参数
-    num_classes = 5  # 4种故障 + 背景
-    batch_size = 2  # 根据GPU内存调整
+    num_classes = 5
+    batch_size = 2
     num_epochs = 100
     learning_rate = 0.005
 
